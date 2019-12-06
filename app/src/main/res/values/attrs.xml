@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="Knob">
+        <attr name="displayOfBack" format="reference" />
+        <attr name="caseOfBack" format="reference" />
+        <attr name="enableKnob" format="reference" />
+        <attr name="disableKnob" format="reference" />
+    </declare-styleable>
+</resources>
