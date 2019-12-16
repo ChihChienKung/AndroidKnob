@@ -3,7 +3,10 @@ package com.chien.knob;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Matrix;
+import android.graphics.Paint;
+import android.graphics.RectF;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
@@ -18,18 +21,21 @@ import java.lang.ref.SoftReference;
  */
 public class RotaryView extends View {
     private static final String TAG = RotaryView.class.getSimpleName();
+    private final int ERROR_RATE = 4;
     private final int INFO_X = 0;
     private final int INFO_Y = 1;
-    private final int START_DEGREES = -90;
-    private final int MAX_DEGREES = 180;
+    private float mInitDegrees = 0;
+    private float mTotalDegrees = 360;
     private float mStartDegrees = 0;
-    private float mDegrees = 0;
+    private float mOnDegrees = 0;
     private State mState = State.NOTHING;
     private float[] mCenterInfo = new float[2];
-    private float[] mTouchInfo = new float[2];
+    private float[] mTouchDownInfo = new float[2];
+    private float[] mTouchMoveInfo = new float[2];
     private SoftReference<Bitmap> mEnableKnobPicture;
     private SoftReference<Bitmap> mDisableKnobPicture;
-    Matrix mMatrix = new Matrix();
+    private Matrix mMatrix = new Matrix();
+    private Knob.OnRotateListener mOnRotateListener;
 
     private enum State {
         DOWN, UP, MOVE, NOTHING
@@ -45,17 +51,23 @@ public class RotaryView extends View {
         setOnTouchListener(mOnTouch);
     }
 
-    private void setDegrees(float degrees) {
-        Log.v(TAG, "set degrees:"+degrees);
-        degrees = sortDegrees(mStartDegrees + degrees);
-//        if (degrees < 0) {
-//            degrees = 0;
-//        } else if (degrees > MAX_DEGREES) {
-//            degrees = MAX_DEGREES;
-//        }
-        Log.d(TAG, "degrees:"+degrees);
-        if (mDegrees != degrees) {
-            mDegrees = degrees;
+    private void addDegrees(float degrees) {
+//        Log.v(TAG, "set degrees:" + degrees);
+        float degreesNow = mStartDegrees + degrees;
+        if (degreesNow > mTotalDegrees) {
+            if (degrees > 0) {
+                degreesNow = mTotalDegrees;
+            }
+        } else if (degreesNow < 0) {
+            if (degrees < 0) {
+                degreesNow = 0;
+            }
+        }
+        mStartDegrees = sortDegrees(degreesNow);
+//        Log.d(TAG, "degreesNow:" + degreesNow + " mTotalDegrees:" + mTotalDegrees);
+        if (mOnDegrees != mStartDegrees) {
+            mOnRotateListener.onRotate(this, mStartDegrees, degrees);
+            mOnDegrees = mStartDegrees;
             invalidate();
         }
     }
@@ -108,38 +120,64 @@ public class RotaryView extends View {
         cacheDisableDrawable(getContext().getDrawable(resId));
     }
 
+    public void initDegrees(float start, float total) {
+        mInitDegrees = start;
+        mTotalDegrees = total;
+    }
+
+    private double getDegrees(float fromX, float fromY, float toX, float toY) {
+        double angrad = Math.atan2((fromX - mCenterInfo[INFO_X]), (fromY - mCenterInfo[INFO_Y])) - Math.atan2((toX - mCenterInfo[INFO_X]), (toY - mCenterInfo[INFO_Y]));
+        if (Math.abs(angrad) > ERROR_RATE) return 0;
+        return Math.toDegrees(angrad);
+    }
+
     @Override
     protected void onDraw(Canvas canvas) {
         if (this.mEnableKnobPicture == null || this.mEnableKnobPicture.get() == null) return;
         Bitmap knobPicture = this.mEnableKnobPicture.get();
 
         mMatrix.reset();
-        mMatrix.postRotate(mDegrees, mCenterInfo[INFO_X], mCenterInfo[INFO_Y]);
+        mMatrix.postRotate(mOnDegrees + mInitDegrees, mCenterInfo[INFO_X], mCenterInfo[INFO_Y]);
         canvas.drawBitmap(knobPicture, mMatrix, null);
+        if (isInEditMode()) {
+            Paint paint = new Paint();
+            paint.setColor(Color.RED);
+            paint.setAlpha(64);
+            RectF oval = new RectF(0, 0, knobPicture.getWidth(), knobPicture.getHeight());
+            canvas.drawArc(oval, mOnDegrees + mInitDegrees - 90, mTotalDegrees, true, paint);
+        }
         super.onDraw(canvas);
     }
 
+    protected void setOnRotateListener(Knob.OnRotateListener listener) {
+        mOnRotateListener = listener;
+    }
+
     private OnTouchListener mOnTouch = new OnTouchListener() {
+
         @Override
         public boolean onTouch(View v, MotionEvent event) {
             int action = event.getAction();
             switch (action) {
                 case MotionEvent.ACTION_DOWN:
                     mState = State.DOWN;
-                    mTouchInfo[INFO_X] = event.getX();
-                    mTouchInfo[INFO_Y] = event.getY();
+                    mTouchDownInfo[INFO_X] = event.getX();
+                    mTouchDownInfo[INFO_Y] = event.getY();
+                    mTouchMoveInfo[INFO_X] = event.getX();
+                    mTouchMoveInfo[INFO_Y] = event.getY();
                     break;
                 case MotionEvent.ACTION_UP:
                     mState = State.UP;
-                    mStartDegrees = mDegrees;
                     break;
                 case MotionEvent.ACTION_MOVE:
                     mState = State.MOVE;
                     float x = event.getX();
                     float y = event.getY();
-                    double degrees = getDegrees(x, y);
+                    float degrees = (float) getDegrees(mTouchMoveInfo[INFO_X], mTouchMoveInfo[INFO_Y], x, y);
+                    mTouchMoveInfo[INFO_X] = x;
+                    mTouchMoveInfo[INFO_Y] = y;
 //                    Log.w(TAG, "degrees:" + degrees);
-                    setDegrees((float) degrees);
+                    addDegrees(degrees);
                     break;
                 case MotionEvent.ACTION_CANCEL:
                     mState = State.NOTHING;
@@ -147,10 +185,6 @@ public class RotaryView extends View {
                     break;
             }
             return true;
-        }
-
-        private double getDegrees(float x, float y) {
-            return Math.toDegrees(Math.atan2((mTouchInfo[INFO_X] - mCenterInfo[INFO_X]), (mTouchInfo[INFO_Y] - mCenterInfo[INFO_Y])) - Math.atan2((x - mCenterInfo[INFO_X]), (y - mCenterInfo[INFO_Y])));
         }
     };
 }

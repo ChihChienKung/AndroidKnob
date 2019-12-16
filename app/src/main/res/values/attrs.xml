@@ -5,5 +5,7 @@
         <attr name="caseOfBack" format="reference" />
         <attr name="enableKnob" format="reference" />
         <attr name="disableKnob" format="reference" />
+        <attr name="startDegrees" format="float" />
+        <attr name="totalDegrees" format="float" />
     </declare-styleable>
 </resources>
