@@ -15,6 +15,7 @@ import android.view.MotionEvent;
 import android.view.View;
 
 import java.lang.ref.SoftReference;
+import java.util.HashMap;
 
 /**
  * Created by Chien.Kung on 2019-12-04.
@@ -32,8 +33,9 @@ public class RotaryView extends View {
     private float[] mCenterInfo = new float[2];
     private float[] mTouchDownInfo = new float[2];
     private float[] mTouchMoveInfo = new float[2];
-    private SoftReference<Bitmap> mEnableKnobPicture;
-    private SoftReference<Bitmap> mDisableKnobPicture;
+    private int mEnableKnobResource = -1;
+    private int mDisableKnobResource = -1;
+    private HashMap<Integer, SoftReference<Bitmap>> mSoftReferenceMap = new HashMap<>();
     private Matrix mMatrix = new Matrix();
     private Knob.OnRotateListener mOnRotateListener;
 
@@ -86,16 +88,13 @@ public class RotaryView extends View {
         return degress;
     }
 
-    private Bitmap cacheEnableDrawable(Drawable drawable) {
-        if (this.mEnableKnobPicture == null || this.mEnableKnobPicture.get() == null)
-            this.mEnableKnobPicture = new SoftReference(drawableToBitmap(drawable));
-        return (Bitmap) this.mEnableKnobPicture.get();
-    }
-
-    private Bitmap cacheDisableDrawable(Drawable drawable) {
-        if (this.mDisableKnobPicture == null || this.mDisableKnobPicture.get() == null)
-            this.mDisableKnobPicture = new SoftReference(drawableToBitmap(drawable));
-        return (Bitmap) this.mDisableKnobPicture.get();
+    private Bitmap resource2Btimap(int resId) {
+        if (mSoftReferenceMap.get(resId) == null || mSoftReferenceMap.get(resId).get() == null){
+            Drawable drawable = getContext().getDrawable(resId);
+            SoftReference<Bitmap> sr = new SoftReference(drawableToBitmap(drawable));
+            mSoftReferenceMap.put(resId, sr);
+        }
+        return (Bitmap) mSoftReferenceMap.get(resId).get();
     }
 
     public Bitmap drawableToBitmap(Drawable bitmapDrawable) {
@@ -109,7 +108,8 @@ public class RotaryView extends View {
     }
 
     public void setEnableDrawableResource(int resId) {
-        Bitmap knobPicture = cacheEnableDrawable(getContext().getDrawable(resId));
+        mEnableKnobResource = resId;
+        Bitmap knobPicture = resource2Btimap(mEnableKnobResource);
         mCenterInfo[INFO_X] = knobPicture.getWidth() / 2f;
         mCenterInfo[INFO_Y] = knobPicture.getHeight() / 2f;
         getLayoutParams().width = knobPicture.getWidth();
@@ -117,7 +117,7 @@ public class RotaryView extends View {
     }
 
     public void setDisableDrawableResource(int resId) {
-        cacheDisableDrawable(getContext().getDrawable(resId));
+        mEnableKnobResource = resId;
     }
 
     public void initDegrees(float start, float total) {
@@ -133,8 +133,8 @@ public class RotaryView extends View {
 
     @Override
     protected void onDraw(Canvas canvas) {
-        if (this.mEnableKnobPicture == null || this.mEnableKnobPicture.get() == null) return;
-        Bitmap knobPicture = this.mEnableKnobPicture.get();
+        if (mEnableKnobResource == -1) return;
+        Bitmap knobPicture = resource2Btimap(mEnableKnobResource);
 
         mMatrix.reset();
         mMatrix.postRotate(mOnDegrees + mInitDegrees, mCenterInfo[INFO_X], mCenterInfo[INFO_Y]);
